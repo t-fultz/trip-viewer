@@ -54,6 +54,8 @@ Back on the phone, tap ⟳.
   **Arrived**, then **Leaving (next morning)**. Tap **Edit** (or ⋯) to fix a time you forgot to tap, or mark a stop skipped.
 - Once you've checked in, the day shows **Running X min behind / ahead** and the rest of the day's times are
   adjusted (~). A stop with a fixed leave time (checkout, a reservation) absorbs the difference.
+- Once you leave a stop (or pass it, or mark it skipped) it folds into a **✓ Completed** box at the top of the day,
+  closed by default - tap it to see times or fix one with **Edit**.
 - No signal? Check-ins are kept on the phone and sent when it's back online.
 - **Navigate in Maps** opens Apple Maps with driving directions. The **Map** tab shows the day's route and pins
   (✓ = done); **Where am I** shows your position.
