@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <title>Trip Viewer</title>
+<link rel="stylesheet" href="leaflet/leaflet.css">
 <style>
   :root {
     --navy: #1f3a5f; --navy-2: #2c5282; --ink: #1d2530; --muted: #5b6573; --line: #dfe3e8; --bg: #f4f6f8;
@@ -90,6 +91,45 @@
   .center { text-align: center; padding: 40px 10px; }
   .spin { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--sel); border-radius: 50%; animation: sp 1s linear infinite; vertical-align: -4px; }
   @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* check-ins */
+  .ck { margin-top: 9px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ck .cb { border: 0; border-radius: 9px; padding: 9px 16px; font-weight: 600; font-size: 15px; background: var(--navy-2); color: #fff; }
+  @media (prefers-color-scheme: dark) { .ck .cb { color: #0f1620; } }
+  .ck .cb.alt { background: var(--chip); color: var(--ink); }
+  .ck .done { font-size: 13.5px; }
+  .ck .done b { font-variant-numeric: tabular-nums; }
+  .ck .ed { margin-left: auto; font-size: 13px; color: var(--sel); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; }
+  .late { color: var(--red); font-weight: 600; } .early { color: var(--green); font-weight: 600; } .ontime { color: var(--muted); }
+  .stop.checked { border-left-color: var(--green); }
+  .stop.skipped { opacity: .55; }
+  .stop.next { box-shadow: 0 0 0 2px var(--sel); }
+  .stop .proj { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .stop .proj s { opacity: .7; }
+  .pace { border-radius: 10px; padding: 8px 12px; font-size: 14px; margin: -2px 0 8px; font-weight: 600; }
+  .pace.behind { background: var(--t-out); } .pace.ahead { background: var(--t-fuel); } .pace.on { background: var(--chip); }
+  .pend { font-size: 12.5px; text-align: center; color: var(--amber); margin: 6px 0; }
+  /* list / map switch */
+  .seg { display: flex; background: var(--chip); border-radius: 9px; padding: 3px; gap: 3px; margin-bottom: 10px; }
+  .seg button { flex: 1; border: 0; background: none; color: var(--muted); border-radius: 7px; padding: 7px; font-weight: 600; }
+  .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  #map { height: calc(100vh - 220px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height: 320px; border-radius: 12px; border: 1px solid var(--line); }
+  @media (prefers-color-scheme: dark) { #map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); } }
+  .pin { width: 26px; height: 26px; border-radius: 50%; background: var(--navy-2); color: #fff; border: 2px solid #fff; display: grid; place-items: center;
+         font: 700 12px -apple-system, sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .pin.done { background: #2f855a; } .pin.skip { background: #8a94a3; } .pin.next { background: #d69e2e; transform: scale(1.2); }
+  .pin.fuel { border-radius: 6px; }
+  .me { width: 16px; height: 16px; border-radius: 50%; background: #2b8cff; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(43,140,255,.25); }
+  .leaflet-popup-content { font: 14px -apple-system, sans-serif; margin: 10px 12px; }
+  .leaflet-popup-content a { color: var(--sel); }
+  .mapbar { display: flex; gap: 8px; margin-top: 8px; align-items: center; } .mapbar .btn { white-space: nowrap; flex: none; }
+  /* sheet */
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50; display: flex; align-items: flex-end; }
+  .sheet > div { background: var(--card); width: 100%; border-radius: 16px 16px 0 0; padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px); max-width: 760px; margin: 0 auto; }
+  .sheet h3 { margin: 0 0 4px; font-size: 17px; }
+  .sheet label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  .sheet .trow { display: flex; gap: 8px; } .sheet .trow input { flex: 1; } .sheet .trow button { flex: none; }
+  .sheet .foot { display: flex; gap: 8px; margin-top: 16px; } .sheet .foot .sp { flex: 1; } .sheet .foot .btn { padding: 10px 12px; }
 </style>
 </head>
 <body>
@@ -103,10 +143,13 @@
 <main id="main"></main>
 <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
 
+<script src="leaflet/leaflet.js"></script>
 <script>
 'use strict';
-/* Trip Viewer - read-only phone companion for Trip Planner.
+/* Trip Viewer - phone companion for Trip Planner.
    Reads the "*.trip.json" (Trip Planner) and "*.tp2.json" (Travel Planner 2.0) files the desktop app saves to a Dropbox folder.
+   The trip files are never changed here. Arrived / Left check-ins go into a separate
+   "<trip> [id].progress.json" file next to the trip; Travel Planner 2.0 reads it for Planned vs Actual.
    Sign-in uses Dropbox's PKCE flow: no password or secret is stored here, only a
    Dropbox access token in this phone's browser storage. */
 
@@ -123,7 +166,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('tv.' + k, JSON.stringify(v)); } catch (e) { /* storage full or blocked */ } },
   del(k) { try { localStorage.removeItem('tv.' + k); } catch (e) { /* ignore */ } },
 };
-const S = { screen: 'list', uid: null, day: null, busy: false, error: '' };
+const S = { screen: 'list', uid: null, day: null, busy: false, error: '', mode: store.get('mode', 'list') };
 
 // ------------------------------------------------------------------ Dropbox sign-in (PKCE)
 function b64url(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -196,15 +239,27 @@ async function refresh() {
     let entries = res.entries;
     while (res.has_more) { res = await dbx('/files/list_folder/continue', { cursor: res.cursor }); entries = entries.concat(res.entries); }
     const files = entries.filter(e => e['.tag'] === 'file' && /\.(trip|tp2)\.json$/i.test(e.name));
+    const progFiles = entries.filter(e => e['.tag'] === 'file' && /\.progress\.json$/i.test(e.name) && !/conflict/i.test(e.name));
     const old = cachedTrips(), next = {};
     for (const f of files) {
       const hit = Object.values(old).find(t => t.path === f.path_lower && t.rev === f.rev);
-      if (hit) { next[hit.uid] = hit; continue; }
+      if (hit) { next[hit.uid] = Object.assign(hit, { display: f.path_display }); continue; }
       const doc = await dbxDownload(f.path_lower);
       if (!['trip-planner-sync', 'travel-planner-2'].includes(doc.format) || !doc.uid) continue;
-      next[doc.uid] = { uid: doc.uid, path: f.path_lower, rev: f.rev, name: doc.name, saved_at: doc.saved_at, saved_by: doc.saved_by, itinerary: doc.itinerary || null };
+      next[doc.uid] = { uid: doc.uid, path: f.path_lower, display: f.path_display, rev: f.rev, name: doc.name, saved_at: doc.saved_at, saved_by: doc.saved_by, itinerary: doc.itinerary || null };
     }
     store.set('trips', next);
+    // check-ins: bring in what the other phone (or a computer's Clear) wrote, then send ours
+    for (const t of Object.values(next)) {
+      const pf = progFiles.find(f => f.name.toLowerCase().includes('[' + t.uid.slice(0, 8) + ']'));
+      const p = prog(t.uid);
+      if (pf) p.path = pf.path_display;
+      if (pf && pf.rev !== p.rev) {
+        try { mergeProg(p, await dbxDownload(pf.path_lower)); p.rev = pf.rev; } catch (e) { /* try again next time */ }
+      }
+      saveProg(t.uid, p);
+    }
+    await pushAll(true);
     store.set('checked', new Date().toISOString());
     if (!files.length) S.error = 'No trips found in that Dropbox folder yet. On your computer, set Menu › Sync Folder to the same folder.';
   } catch (e) {
@@ -268,8 +323,197 @@ function openTrip(uid) {
 function mapLink(s) {
   const q = s.lat != null && !s.no_route ? `${s.lat},${s.lon}` : [s.address, s.city, s.state].filter(Boolean).join(', ') || s.name;
   const apple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
-  return apple ? `https://maps.apple.com/?daddr=${encodeURIComponent(q)}` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+  return apple ? `https://maps.apple.com/?daddr=${encodeURIComponent(q)}&dirflg=d` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
 }
+
+// ------------------------------------------------------------------ check-ins (kept on the phone, sent to Dropbox when there's signal)
+const PROG_FORMAT = 'travel-planner-2-progress';
+function prog(uid) { return Object.assign({ records: {}, reset_at: '', rev: '', path: '', pending: false }, store.get('prog.' + uid, {})); }
+function saveProg(uid, p) { store.set('prog.' + uid, p); }
+function nowISO() { return new Date().toISOString().replace(/\.\d+Z$/, 'Z'); }
+function liveRecs(p) {
+  const out = {};
+  Object.entries(p.records || {}).forEach(([k, r]) => { if (!r.cleared && (r.at || '') >= (p.reset_at || '') && (r.arrived || r.left || r.skipped)) out[k] = r; });
+  return out;
+}
+function mergeProg(p, doc) {                // newest change of each stop wins; a reset from the computer wins over older taps
+  if (!doc || doc.format !== PROG_FORMAT) return p;
+  if ((doc.reset_at || '') > (p.reset_at || '')) p.reset_at = doc.reset_at;
+  Object.entries(doc.records || {}).forEach(([k, r]) => { const mine = p.records[k]; if (!mine || (r.at || '') > (mine.at || '')) p.records[k] = r; });
+  Object.keys(p.records).forEach(k => { if ((p.records[k].at || '') < (p.reset_at || '')) delete p.records[k]; });
+  return p;
+}
+function progPath(t, p) {
+  if (p.path) return p.path;
+  const src = t.display || t.path;
+  return src.replace(/\.tp2\.json$/i, '.progress.json');
+}
+async function dbxUpload(path, obj) {
+  const tok = await accessToken();
+  const r = await fetch(DBX_CONTENT + '/files/upload', { method: 'POST',
+    headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({ path, mode: 'overwrite', mute: true }).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) },
+    body: JSON.stringify(obj, null, 1) });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    if (/missing_scope|files\.content\.write/.test(t)) throw new Error('Check-ins need Dropbox write permission: in your Dropbox app tick files.content.write (Permissions tab, Submit), then here ⚙ › Disconnect Dropbox and connect again. Check-ins are kept on this phone until then.');
+    if (r.status === 401) { store.del('token'); throw new Error('Dropbox sign-in expired - tap Connect Dropbox again. Check-ins are kept on this phone.'); }
+    throw new Error(`Couldn't save check-ins to Dropbox (${r.status}). They're kept on this phone and sent next time.`);
+  }
+  return r.json();
+}
+async function pushProg(uid) {
+  const t = cachedTrips()[uid], p = prog(uid);
+  if (!t || !p.pending || !t.path || t.path.startsWith('file:') || !store.get('token', null)) return;
+  const path = progPath(t, p);
+  try { mergeProg(p, await dbxDownload(path)); } catch (e) { if (!/not_found|can't find/i.test(e.message)) throw e; }
+  const doc = { format: PROG_FORMAT, version: 1, uid, name: t.name, updated: nowISO(), reset_at: p.reset_at || '', records: p.records };
+  const r = await dbxUpload(path, doc);
+  p.rev = r.rev; p.path = r.path_display || path; p.pending = false;
+  saveProg(uid, p);
+}
+let pushing = false;
+async function pushAll(quiet) {
+  if (pushing || !navigator.onLine) return;
+  pushing = true;
+  try {
+    for (const uid of Object.keys(cachedTrips())) if (prog(uid).pending) await pushProg(uid);
+  } catch (e) { if (!quiet || /permission|sign-in/.test(e.message)) S.error = e.message; }
+  pushing = false;
+  if (S.screen === 'trip') renderPending();
+}
+let pushT = null;
+function schedulePush() { clearTimeout(pushT); pushT = setTimeout(() => pushAll(false).then(() => render()), 600); }
+addEventListener('online', () => pushAll(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pushAll(true); });
+
+function setRec(s, change) {
+  const p = prog(S.uid);
+  const r = Object.assign({}, p.records[s.pkey] || {}, change, {
+    day: s.day, name: s.name, plan_arrive: s.arrive_iso || '', plan_leave: s.leave_iso || s.next_iso || '',
+    at: nowISO(), by: store.get('device', '') || 'phone' });
+  if (r.cleared) { delete r.arrived; delete r.left; delete r.skipped; }
+  p.records[s.pkey] = r; p.pending = true;
+  saveProg(S.uid, p);
+  render(); schedulePush();
+}
+// clock times are shown in the stop's own time zone (the offset on its planned time)
+function offsetOf(s) { const m = /([+-])(\d\d):(\d\d)$/.exec(s.arrive_iso || s.leave_iso || ''); return m ? (m[1] === '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : -new Date().getTimezoneOffset(); }
+function clockAt(iso, off) {
+  if (!iso) return '';
+  const d = new Date(new Date(iso).getTime() + off * 60000), hh = d.getUTCHours(), mm = d.getUTCMinutes();
+  return `${hh % 12 || 12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'AM' : 'PM'}`;
+}
+function hhmmAt(iso, off) { const d = new Date(new Date(iso).getTime() + off * 60000); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`; }
+function isoFromClock(hhmm, s, off, after) {      // "09:42" on the stop's day, in its zone
+  const base = (s.arrive_iso || s.leave_iso || '').slice(0, 10) || todayISO();
+  const [y, mo, d] = base.split('-').map(Number), [h, mi] = hhmm.split(':').map(Number);
+  let t = Date.UTC(y, mo - 1, d, h, mi) - off * 60000;
+  if (after && t < new Date(after).getTime() - 6 * 3600000) t += 86400000;     // past midnight
+  return new Date(t).toISOString().replace(/\.\d+Z$/, 'Z');
+}
+const mins = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(a)) / 60000) : null;
+function dlt(m, word) {
+  if (m == null) return '';
+  if (Math.abs(m) <= 5) return `<span class="ontime">on time</span>`;
+  const a = Math.abs(m), t = a >= 60 ? `${Math.floor(a / 60)}h ${a % 60}m` : `${a} min`;
+  return `<span class="${m > 0 ? 'late' : 'early'}">${t} ${m > 0 ? 'late' : 'early'}${word || ''}</span>`;
+}
+function kindOf(s) {
+  if (s.first || (!s.arrive_iso && s.leave_iso)) return 'start';        // the trip's starting point
+  if (s.next_iso && !s.leave_iso) return 'night';                       // tonight's lodging: arrive, then leave next morning
+  if (s.last_of_day || !s.leave_iso) return 'end';
+  if (s.type === 'Waypoint' || (s.arrive_iso && s.arrive_iso === s.leave_iso)) return 'pass';
+  return 'stop';
+}
+// Pace for one day: how far the latest check-in is from the plan, carried down the rest of the day.
+// A stop with a fixed leave time (hotel checkout, a reservation) soaks up being early or late.
+function dayPace(stops, recs, night) {
+  let last = -1, delay = null;
+  const nr = night && recs[night.pkey];              // leaving last night's hotel late/early carries into today
+  if (nr && nr.left) delay = mins(night.next_iso, nr.left);
+  stops.forEach((s, i) => {
+    const r = recs[s.pkey]; if (!r || r.skipped) return;
+    const d = r.left ? mins(s.leave_iso || s.next_iso, r.left) : r.arrived ? mins(s.arrive_iso, r.arrived) : null;
+    if (d != null) { last = i; delay = d; }
+  });
+  const proj = {};
+  if (delay == null) return { delay: null, proj, last };
+  let dl = delay;
+  for (let i = last + 1; i < stops.length; i++) {
+    const s = stops[i], r = recs[s.pkey];
+    if (r && r.skipped) continue;
+    const pa = s.arrive_iso ? new Date(s.arrive_iso).getTime() : null, pl = s.leave_iso ? new Date(s.leave_iso).getTime() : null;
+    const ea = pa != null ? pa + dl * 60000 : null;
+    let el = pl;
+    if (pl != null) {
+      if (s.depart_at && ea != null) el = Math.max(pl, ea + (s.stay_min || 0) * 60000);
+      else el = pl + dl * 60000;
+      dl = Math.round((el - pl) / 60000);
+    }
+    proj[s.pkey] = { arrive: ea != null ? new Date(ea).toISOString() : null, leave: el != null ? new Date(el).toISOString() : null, d: Math.round(((ea ?? el) - (pa ?? pl)) / 60000) };
+  }
+  return { delay, proj, last };
+}
+function ckHtml(s, r, canCk) {
+  if (!canCk || s.no_route && !s.pkey) return '';
+  const off = offsetOf(s), k = kindOf(s);
+  if (r && r.skipped) return `<div class="ck"><span class="done muted">Skipped</span><button class="ed" data-ed="${esc(s.pkey)}">Edit</button></div>`;
+  const parts = [];
+  if (r && r.arrived && k !== 'pass') parts.push(`Arrived <b>${clockAt(r.arrived, off)}</b> ${dlt(mins(s.arrive_iso, r.arrived))}`);
+  if (r && r.left) parts.push(`${k === 'pass' ? 'Passed' : 'Left'} <b>${clockAt(r.left, off)}</b> ${dlt(mins(s.leave_iso || s.next_iso, r.left))}`);
+  let btn = '';
+  if (k === 'start' && !(r && r.left)) btn = `<button class="cb" data-ck="left" data-k="${esc(s.pkey)}">Leaving now</button>`;
+  else if (k === 'end' && !(r && r.arrived)) btn = `<button class="cb" data-ck="arrived" data-k="${esc(s.pkey)}">Arrived</button>`;
+  else if (k === 'pass' && !(r && r.left)) btn = `<button class="cb alt" data-ck="pass" data-k="${esc(s.pkey)}">Passed</button>`;
+  else if (k === 'stop' && !(r && r.arrived)) btn = `<button class="cb" data-ck="arrived" data-k="${esc(s.pkey)}">Arrived</button>`;
+  else if (k === 'stop' && !(r && r.left)) btn = `<button class="cb" data-ck="left" data-k="${esc(s.pkey)}">Leaving now</button>`;
+  else if (k === 'night' && !(r && r.arrived)) btn = `<button class="cb" data-ck="arrived" data-k="${esc(s.pkey)}">Arrived</button>`;
+  else if (k === 'night' && !(r && r.left)) btn = `<button class="cb alt" data-ck="left" data-k="${esc(s.pkey)}">Leaving (next morning)</button>`;
+  return `<div class="ck">${btn}${parts.length ? `<span class="done">${parts.join(' · ')}</span>` : ''}<button class="ed" data-ed="${esc(s.pkey)}">${r ? 'Edit' : '⋯'}</button></div>`;
+}
+function editSheet(s) {
+  const p = prog(S.uid), r = p.records[s.pkey] || {}, off = offsetOf(s), k = kindOf(s);
+  const box = document.createElement('div');
+  box.className = 'sheet';
+  const showA = k !== 'start', showL = k !== 'end';
+  const lvLabel = k === 'night' ? 'Left (next morning)' : 'Left at';
+  box.innerHTML = `<div><h3>${esc(s.name)}</h3><div class="tiny muted">Planned ${esc(s.arrive || '')}${s.arrive && s.leave && s.leave !== s.arrive ? ' – ' : ''}${s.leave && s.leave !== s.arrive ? esc(s.leave) : ''}. Times are ${esc(s.arrive ? (s.arrive.split(' ')[2] || 'local') : 'local')} time.</div>
+    ${showA ? `<label>${k === 'pass' ? 'Passed at' : 'Arrived at'}</label><div class="trow"><input type="time" id="eA" value="${r.arrived ? hhmmAt(r.arrived, off) : ''}"><button class="btn" id="eAn">Now</button></div>` : ''}
+    ${showL && k !== 'pass' ? `<label>${lvLabel}</label><div class="trow"><input type="time" id="eL" value="${r.left ? hhmmAt(r.left, off) : ''}"><button class="btn" id="eLn">Now</button></div>` : ''}
+    <div class="foot"><button class="btn" id="eSkip">${r.skipped ? 'Not Skipped' : 'Skipped'}</button><button class="btn" id="eClr">Clear</button>
+      <span class="sp"></span><button class="btn" id="eCancel">Cancel</button><button class="btn primary" id="eSave">Save</button></div></div>`;
+  document.body.appendChild(box);
+  const q = id => box.querySelector('#' + id), close = () => box.remove();
+  const nowHM = () => hhmmAt(new Date().toISOString(), off);
+  if (q('eAn')) q('eAn').onclick = () => { q('eA').value = nowHM(); };
+  if (q('eLn')) q('eLn').onclick = () => { q('eL').value = nowHM(); };
+  box.onclick = e => { if (e.target === box) close(); };
+  q('eCancel').onclick = close;
+  q('eClr').onclick = () => { close(); setRec(s, { cleared: true }); };
+  q('eSkip').onclick = () => { close(); setRec(s, r.skipped ? { skipped: false, cleared: !r.arrived && !r.left } : { skipped: true, cleared: false }); };
+  q('eSave').onclick = () => {
+    const ref = s.arrive_iso || s.leave_iso;
+    const a = q('eA') && q('eA').value ? isoFromClock(q('eA').value, s, off, ref) : null;
+    let l = q('eL') && q('eL').value ? isoFromClock(q('eL').value, k === 'night' ? Object.assign({}, s, { arrive_iso: s.next_iso }) : s, off, a || ref) : null;
+    if (k === 'pass') l = a;
+    if (a && l && l < a) { alert('The leave time is before the arrival time.'); return; }
+    close();
+    setRec(s, { arrived: a || undefined, left: l || undefined, skipped: false, cleared: !a && !l });
+  };
+}
+function doCheck(s, what) {
+  const t = nowISO();
+  if (what === 'pass') setRec(s, { arrived: t, left: t, skipped: false, cleared: false });
+  else setRec(s, { [what]: t, skipped: false, cleared: false });
+}
+function renderPending() {
+  const el = document.getElementById('pend'); if (!el) return;
+  const p = prog(S.uid);
+  el.textContent = p.pending ? (navigator.onLine ? 'Sending check-ins to Dropbox…' : 'No signal - check-ins are saved on this phone and sent when you’re back online.') : '';
+}
+
+// ------------------------------------------------------------------ trip screen
 function renderTrip() {
   const t = cachedTrips()[S.uid];
   if (!t) { S.screen = 'list'; return render(); }
@@ -279,35 +523,63 @@ function renderTrip() {
     $('#main').innerHTML = `<div class="card">This trip file was saved by an older Trip Planner. Open the trip on your computer once (any change saves it again), then tap ⟳.</div>`;
     return;
   }
+  const canCk = (it.v || 1) >= 2 && !t.path.startsWith('file:');
+  const recs = liveRecs(prog(S.uid));
   const tt = it.totals || {}, start = it.trip.start_date, td = todayISO();
   let h = S.error ? `<div class="err">${esc(S.error)}</div>` : '';
-  h += `<div class="kpis">
+  h += `<div class="seg"><button data-mode="list" class="${S.mode !== 'map' ? 'on' : ''}">List</button><button data-mode="map" class="${S.mode === 'map' ? 'on' : ''}">Map</button></div>`;
+  h += `<div class="daybar"><button data-d="all" class="${S.day === 'all' ? 'on' : ''}">All days</button>` +
+    it.days.map(d => `<button data-d="${d.day}" class="${String(S.day) === String(d.day) ? 'on' : ''}${dayISO(start, d.day) === td ? ' today' : ''}">Day ${d.day}${start ? ' · ' + esc(d.date.split(' ')[1] || '') : ''}</button>`).join('') + '</div>';
+  if (S.mode === 'map') {
+    h += `<div id="map"></div><div class="mapbar"><button class="btn" id="mLoc">◎ Where am I</button><span class="tiny muted" id="mInfo"></span></div><div id="pend" class="pend"></div>`;
+    $('#main').innerHTML = h;
+    bindTripBar();
+    drawMap(it, recs);
+    renderPending();
+    return;
+  }
+  if (S.day === 'all') h += `<div class="kpis">
     <div class="kpi main"><div class="l">Total</div><div class="v">${esc(tt.grand || '$0')}</div></div>
     <div class="kpi"><div class="l">Miles</div><div class="v">${esc(tt.miles || 0)}</div></div>
     <div class="kpi"><div class="l">Driving</div><div class="v">${esc(tt.drive || '0:00')} h</div></div>
     <div class="kpi"><div class="l">Days / nights</div><div class="v">${esc(tt.days)} / ${esc(tt.nights)}</div></div>
     <div class="kpi"><div class="l">Fuel</div><div class="v">${esc(tt.fuel || '$0')}</div></div>
     <div class="kpi"><div class="l">Lodging</div><div class="v">${esc(tt.lodging || '$0')}</div></div></div>`;
-  h += `<div class="daybar"><button data-d="all" class="${S.day === 'all' ? 'on' : ''}">All days</button>` +
-    it.days.map(d => `<button data-d="${d.day}" class="${String(S.day) === String(d.day) ? 'on' : ''}${dayISO(start, d.day) === td ? ' today' : ''}">Day ${d.day}${start ? ' · ' + esc(d.date.split(' ')[1] || '') : ''}</button>`).join('') + '</div>';
+  if (!canCk && (it.v || 1) < 2 && !t.path.startsWith('file:')) h += `<div class="card small muted">Check-ins (Arrived / Left) appear once Travel Planner 2.0 on your computer is updated and has synced this trip.</div>`;
   if ((it.warnings || []).length) {
     h += `<details class="warn"><summary>⚠ ${it.warnings.length} fuel &amp; schedule note${it.warnings.length === 1 ? '' : 's'}</summary><ul>${it.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>`;
   }
+  h += '<div id="pend" class="pend"></div>';
   const days = S.day === 'all' ? it.days : it.days.filter(d => String(d.day) === String(S.day));
   days.forEach(d => {
+    const dstops = it.stops.filter(s => s.day === d.day);
+    const prevDay = it.stops.filter(s => s.day < d.day), night = prevDay.length && prevDay[prevDay.length - 1].next_iso ? prevDay[prevDay.length - 1] : null;
+    const pace = canCk ? dayPace(dstops, recs, night) : { delay: null, proj: {}, last: -1 };
+    const allDone = dstops.length && dstops.every(s => { const r = recs[s.pkey]; return r && (r.skipped || r.left || (['end', 'night', 'pass'].includes(kindOf(s)) && r.arrived)); });
     h += `<div class="dayhead"><div class="t">Day ${d.day}${d.date ? ' · ' + esc(d.date) : ''}${dayISO(start, d.day) === td ? ' · <span style="color:var(--green)">Today</span>' : ''}${d.plan ? ` · <span style="color:var(--muted)">${esc(d.plan)}</span>` : ''}</div>
       <div class="s"><span>${esc(d.span)}</span><span>${d.stops} stop${d.stops === 1 ? '' : 's'}</span><span>${esc(d.miles)} mi</span>${d.drive ? `<span>${esc(d.drive)} driving</span>` : ''}<span>${esc(d.total || '$0.00')}</span></div></div>`;
-    it.stops.filter(s => s.day === d.day).forEach((s, i) => {
+    if (pace.delay != null && !allDone) {
+      const m = pace.delay, a = Math.abs(m), txt = a >= 60 ? `${Math.floor(a / 60)} h ${a % 60} min` : `${a} min`;
+      h += Math.abs(m) <= 5 ? `<div class="pace on">On schedule</div>` : `<div class="pace ${m > 0 ? 'behind' : 'ahead'}">Running ${txt} ${m > 0 ? 'behind' : 'ahead of'} plan${m > 0 ? '' : ''} - times below are adjusted</div>`;
+    }
+    const nextIdx = canCk ? dstops.findIndex(s => !recs[s.pkey] || (kindOf(s) === 'stop' && !recs[s.pkey].left && !recs[s.pkey].skipped)) : -1;
+    dstops.forEach((s, i) => {
+      const r = recs[s.pkey], pj = pace.proj[s.pkey];
       const kind = s.tag === 'OUT' || s.tag === 'LOW' ? s.tag : s.type === 'Fuel' ? 'fuel' : s.type === 'Lodging' ? 'lodging' : '';
+      const st = r ? (r.skipped ? ' skipped' : ' checked') : '';
+      const nx = i === nextIdx && dayISO(start, d.day) <= td && Object.keys(recs).length ? ' next' : '';
       const where = s.address || [s.city, s.state].filter(Boolean).join(', ');
       const items = (s.purchases || []).map(p => `${esc(p.category)} $${(+p.amount).toFixed(2)}${p.note ? ' (' + esc(p.note) + ')' : ''}`).join(' · ');
-      h += `<div class="stop ${kind}">
-        <div class="top"><div class="nm">${esc(s.name)}</div><div class="time">${esc(s.arrive || s.leave || '')}</div></div>
+      const off = offsetOf(s);
+      let time = esc(s.arrive || s.leave || '');
+      if (pj && !r && Math.abs(pj.d) > 5) time = `~${clockAt(pj.arrive || pj.leave, off)}<div class="proj"><s>${esc(s.arrive || s.leave || '')}</s> plan</div>`;
+      h += `<div class="stop ${kind}${st}${nx}">
+        <div class="top"><div class="nm">${esc(s.name)}</div><div class="time">${time}</div></div>
         <div class="meta"><span>${esc(s.type_txt || s.type)}</span>${where ? `<span>${esc(where)}</span>` : ''}${s.tag === 'OUT' ? '<span class="tag" style="color:var(--red)">out of fuel</span>' : s.tag === 'LOW' ? '<span class="tag" style="color:var(--amber)">low fuel</span>' : ''}</div>
         <div class="grid">
           <div><span>Miles</span><b>${s.no_route ? 'est. ' : ''}${esc(s.leg || '–')}</b></div>
           <div><span>Drive</span><b>${esc(s.drive_txt || '–')}</b></div>
-          <div><span>Leave</span><b>${esc(s.leave || '–')}</b></div>
+          <div><span>Leave</span><b>${pj && pj.leave && !r && Math.abs(pj.d) > 5 && s.leave ? '~' + clockAt(pj.leave, off) : esc(s.leave || '–')}</b></div>
           <div><span>Stay</span><b>${s.stay_txt ? esc(s.stay_txt) + ' min' : '–'}</b></div>
           <div><span>Tank on arrival</span><b>${esc(s.tank || '–')}</b></div>
           <div><span>Cost</span><b>${esc(s.cost_txt || '–')}</b></div>
@@ -315,14 +587,80 @@ function renderTrip() {
         </div>
         ${items ? `<div class="notes muted">${items}</div>` : ''}
         ${s.notes ? `<div class="notes">📝 ${esc(s.notes)}</div>` : ''}
-        ${s.no_route ? '' : `<div class="acts"><a href="${mapLink(s)}" target="_blank" rel="noopener">Directions</a></div>`}
+        ${s.no_route ? '' : `<div class="acts"><a href="${mapLink(s)}" target="_blank" rel="noopener">Navigate in Maps</a></div>`}
+        ${ckHtml(s, r, canCk && !!s.pkey)}
       </div>`;
     });
   });
-  h += `<div class="status">Saved ${esc(when(t.saved_at))}${t.saved_by ? ' on ' + esc(t.saved_by) : ''} · view only - edit on your computer</div>`;
+  h += `<div class="status">Plan saved ${esc(when(t.saved_at))}${t.saved_by ? ' on ' + esc(t.saved_by) : ''} · edit the plan on your computer</div>`;
   $('#main').innerHTML = h;
+  bindTripBar();
+  const byKey = {}; it.stops.forEach(s => { byKey[s.pkey] = s; });
+  document.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => doCheck(byKey[b.dataset.k], b.dataset.ck));
+  document.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => editSheet(byKey[b.dataset.ed]));
+  renderPending();
+}
+function bindTripBar() {
   document.querySelectorAll('.daybar [data-d]').forEach(b => b.onclick = () => { S.day = b.dataset.d === 'all' ? 'all' : +b.dataset.d; render(); scrollTo(0, 0); });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; store.set('mode', S.mode); render(); });
   const on = document.querySelector('.daybar .on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+
+// ------------------------------------------------------------------ map (OpenStreetMap)
+let lmap = null, meMark = null, meWatch = null;
+function decodeLine(str) {
+  const pts = []; let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    for (const k of [0, 1]) {
+      let b, shift = 0, res = 0;
+      do { b = str.charCodeAt(i++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const v = res & 1 ? ~(res >> 1) : res >> 1;
+      if (k === 0) lat += v; else lon += v;
+    }
+    pts.push([lat / 1e5, lon / 1e5]);
+  }
+  return pts;
+}
+function drawMap(it, recs) {
+  if (typeof L === 'undefined') { $('#map').innerHTML = '<div class="center muted">The map needs a connection the first time.</div>'; return; }
+  if (lmap) { lmap.remove(); lmap = null; meMark = null; }
+  lmap = L.map('map', { zoomControl: false, attributionControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(lmap);
+  const showDay = d => S.day === 'all' || String(S.day) === String(d);
+  const stops = it.stops.filter(s => showDay(s.day) && s.lat != null && !s.no_route);
+  const bounds = [];
+  (it.legs || []).filter(l => showDay(l.day)).forEach(l => {
+    const pts = decodeLine(l.line);
+    L.polyline(pts, { color: '#2c5282', weight: 4, opacity: .8, dashArray: l.road ? null : '6 8' }).addTo(lmap);
+    pts.forEach(p => bounds.push(p));
+  });
+  const firstOpen = stops.find(s => !recs[s.pkey]);
+  stops.forEach((s, i) => {
+    const r = recs[s.pkey];
+    const cls = r ? (r.skipped ? 'skip' : 'done') : s === firstOpen && Object.keys(recs).length ? 'next' : '';
+    const n = it.stops.filter(x => x.day === s.day).indexOf(s) + 1;
+    const icon = L.divIcon({ className: '', html: `<div class="pin ${cls}${s.type === 'Fuel' ? ' fuel' : ''}">${r && !r.skipped ? '✓' : n}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+    const m = L.marker([s.lat, s.lon], { icon }).addTo(lmap);
+    const off = offsetOf(s);
+    m.bindPopup(`<b>${esc(s.name)}</b><br><span style="color:#666">Day ${s.day} · ${esc(s.type_txt || s.type)}</span><br>
+      Plan ${esc(s.arrive || s.leave || '')}${r && r.arrived ? `<br>Arrived ${clockAt(r.arrived, off)}` : ''}${r && r.left && kindOf(s) !== 'pass' ? `<br>Left ${clockAt(r.left, off)}` : ''}
+      <br><a href="${mapLink(s)}" target="_blank" rel="noopener">Navigate in Maps</a>`);
+    bounds.push([s.lat, s.lon]);
+  });
+  if (bounds.length) lmap.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 }); else lmap.setView([37.5, -84], 6);
+  $('#mInfo').textContent = stops.length ? `${stops.length} stops · tap a pin for times and Navigate` : 'No stops on the map for this day.';
+  $('#mLoc').onclick = locateMe;
+  if (meWatch != null) locateMe(true);
+}
+function locateMe(keep) {
+  if (!navigator.geolocation) { $('#mInfo').textContent = 'Location isn’t available.'; return; }
+  if (meWatch != null && keep !== true) { if (meMark) lmap.setView(meMark.getLatLng(), Math.max(lmap.getZoom(), 12)); return; }
+  if (meWatch == null) meWatch = navigator.geolocation.watchPosition(p => {
+    const ll = [p.coords.latitude, p.coords.longitude];
+    if (!lmap) return;
+    if (!meMark) { meMark = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 1000 }).addTo(lmap); lmap.setView(ll, Math.max(lmap.getZoom(), 12)); }
+    else meMark.setLatLng(ll);
+  }, e => { $('#mInfo').textContent = 'Location: ' + (e.code === 1 ? 'allow it in Settings › Safari › Location (or for the home-screen app)' : e.message); }, { enableHighAccuracy: true, maximumAge: 15000 });
 }
 function settings() { S.screen = 'settings'; render(); }
 function renderSettings() {
@@ -337,10 +675,13 @@ function renderSettings() {
     <div class="card"><h2>Folder</h2>
       <p class="small muted" style="margin-top:0">Leave blank if your Dropbox app uses an <b>App folder</b> (recommended). Otherwise type the folder path, e.g. <code>/Trip Planner</code>.</p>
       <input id="sFolder" value="${esc(store.get('folder', ''))}" placeholder="(app folder)" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
+    <div class="card"><h2>This phone's name</h2>
+      <p class="small muted" style="margin-top:0">Shown on the computer next to the check-ins it sent.</p>
+      <input id="sDev" value="${esc(store.get('device', ''))}" placeholder="e.g. Timothy's iPhone" autocomplete="off"></div>
     <div class="card row"><button class="btn primary" id="sSave">Save</button>
       ${signed ? '<button class="btn" id="sOut">Disconnect Dropbox</button>' : '<button class="btn" id="sConn">Save &amp; Connect Dropbox</button>'}</div>
-    <div class="status">Trips are kept on this phone after each check, so they still show with no signal.</div>`;
-  const save = () => { store.set('appKey', $('#sKey').value.trim()); store.set('folder', $('#sFolder').value.trim()); };
+    <div class="status">Trips are kept on this phone after each check, so they still show with no signal. Check-ins made with no signal are sent the next time there is one.</div>`;
+  const save = () => { store.set('appKey', $('#sKey').value.trim()); store.set('folder', $('#sFolder').value.trim()); store.set('device', $('#sDev').value.trim()); };
   $('#sSave').onclick = () => { save(); S.screen = 'list'; refresh(); };
   if (signed) $('#sOut').onclick = () => { store.del('token'); store.del('trips'); S.screen = 'list'; render(); };
   else $('#sConn').onclick = () => { save(); connect(); };
