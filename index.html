@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trips">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Trip Viewer</title>
+<style>
+  :root {
+    --navy: #1f3a5f; --navy-2: #2c5282; --ink: #1d2530; --muted: #5b6573; --line: #dfe3e8; --bg: #f4f6f8;
+    --card: #fff; --chip: #eef2f7; --green: #2f855a; --red: #c53030; --amber: #b7791f; --sel: #2b6cb0;
+    --t-fuel: #eaf6ee; --t-lod: #e9f1fb; --t-low: #fff4d6; --t-out: #fbe3e5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --navy: #142b47; --navy-2: #8ab4f8; --ink: #e3e8ef; --muted: #9aa6b5; --line: #2f3946; --bg: #12161c;
+      --card: #1b2129; --chip: #26303c; --green: #48bb78; --red: #f56565; --amber: #ecc94b; --sel: #6aa8ff;
+      --t-fuel: #18291f; --t-lod: #172741; --t-low: #3a2f12; --t-out: #3f1d1f;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink);
+         font-size: 15px; min-height: 100vh; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; font-size: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; width: 100%;
+          background: var(--card); color: var(--ink); }
+  header { background: var(--navy); color: #fff; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+           display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 10; }
+  header img { width: 28px; height: 28px; border-radius: 7px; }
+  header h1 { font-size: 17px; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .hb { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+  main { padding: 12px 12px calc(env(safe-area-inset-bottom) + 24px); max-width: 760px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .muted { color: var(--muted); } .tiny { font-size: 12.5px; } .small { font-size: 13.5px; }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 10px 14px; border-radius: 9px; }
+  .btn.primary { background: var(--navy-2); border-color: var(--navy-2); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #0f1620; } }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  h2 { font-size: 16px; margin: 4px 0 10px; }
+  code { background: var(--chip); padding: 2px 5px; border-radius: 5px; font-size: 13px; word-break: break-all; }
+  ol { padding-left: 20px; line-height: 1.55; } ol li { margin-bottom: 6px; }
+
+  .trip { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .trip b { display: block; }
+  .trip .go { margin-left: auto; color: var(--muted); font-size: 20px; }
+  .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+  .kpi .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .kpi .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kpi.main .v { color: var(--navy-2); }
+  .daybar { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; position: sticky;
+            top: calc(env(safe-area-inset-top) + 52px); background: var(--bg); z-index: 5; }
+  .daybar::-webkit-scrollbar { display: none; }
+  .daybar button { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 18px; padding: 6px 12px; font-size: 13.5px; }
+  .daybar button.on { background: var(--navy-2); border-color: var(--navy-2); color: #fff; }
+  .daybar button.today { box-shadow: inset 0 0 0 2px var(--green); }
+  .dayhead { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; margin: 14px 0 8px; }
+  .dayhead .t { font-weight: 700; color: var(--navy-2); font-size: 16px; }
+  .dayhead .s { font-size: 13px; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .stop { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 10px;
+          padding: 10px 12px; margin-bottom: 8px; }
+  .stop.fuel { border-left-color: var(--green); background: var(--t-fuel); }
+  .stop.lodging { border-left-color: var(--sel); background: var(--t-lod); }
+  .stop.LOW { border-left-color: var(--amber); background: var(--t-low); }
+  .stop.OUT { border-left-color: var(--red); background: var(--t-out); }
+  .stop .top { display: flex; gap: 8px; align-items: baseline; }
+  .stop .nm { font-weight: 600; font-size: 15.5px; flex: 1; min-width: 0; }
+  .stop .time { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .stop .meta { font-size: 13px; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 3px 12px; }
+  .stop .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; font-size: 13px; }
+  .stop .grid div span { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .stop .grid div b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stop .notes { font-size: 13px; margin-top: 7px; }
+  .stop .acts { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .stop .acts a { font-size: 13px; color: var(--sel); text-decoration: none; border: 1px solid var(--line); border-radius: 7px; padding: 4px 9px; background: var(--card); }
+  .tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .75; }
+  .warn { background: var(--t-low); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 10px; }
+  .warn summary { font-weight: 600; cursor: pointer; }
+  .warn ul { margin: 6px 0 0; padding-left: 18px; }
+  .status { font-size: 12.5px; color: var(--muted); text-align: center; margin: 14px 0; }
+  .err { background: var(--t-out); color: var(--ink); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }
+  .center { text-align: center; padding: 40px 10px; }
+  .spin { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--sel); border-radius: 50%; animation: sp 1s linear infinite; vertical-align: -4px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="">
+  <h1 id="title">Trips</h1>
+  <button class="hb" id="hBack" style="display:none">‹ Trips</button>
+  <button class="hb" id="hRefresh" title="Refresh">⟳</button>
+  <button class="hb" id="hMenu" title="Settings">⚙</button>
+</header>
+<main id="main"></main>
+<input type="file" id="fileIn" accept=".json,application/json" style="display:none">
+
+<script>
+'use strict';
+/* Trip Viewer - read-only phone companion for Trip Planner.
+   Reads the "*.trip.json" (Trip Planner) and "*.tp2.json" (Travel Planner 2.0) files the desktop app saves to a Dropbox folder.
+   Sign-in uses Dropbox's PKCE flow: no password or secret is stored here, only a
+   Dropbox access token in this phone's browser storage. */
+
+const DBX_AUTH = 'https://www.dropbox.com/oauth2/authorize';
+const DBX_TOKEN = 'https://api.dropboxapi.com/oauth2/token';
+const DBX_API = 'https://api.dropboxapi.com/2';
+const DBX_CONTENT = 'https://content.dropboxapi.com/2';
+const REDIRECT = location.origin + location.pathname;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('tv.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('tv.' + k, JSON.stringify(v)); } catch (e) { /* storage full or blocked */ } },
+  del(k) { try { localStorage.removeItem('tv.' + k); } catch (e) { /* ignore */ } },
+};
+const S = { screen: 'list', uid: null, day: null, busy: false, error: '' };
+
+// ------------------------------------------------------------------ Dropbox sign-in (PKCE)
+function b64url(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+async function connect() {
+  const key = store.get('appKey', '').trim();
+  if (!key) { settings(); return; }
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+  const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+  store.set('pkce', { verifier, state });
+  const q = new URLSearchParams({ client_id: key, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256',
+    redirect_uri: REDIRECT, token_access_type: 'offline', state });
+  location.href = DBX_AUTH + '?' + q;
+}
+async function finishSignIn() {
+  const q = new URLSearchParams(location.search);
+  if (!q.get('code') && !q.get('error')) return false;
+  history.replaceState(null, '', REDIRECT);
+  const pk = store.get('pkce', null);
+  store.del('pkce');
+  if (q.get('error')) { S.error = 'Dropbox sign-in was cancelled or refused: ' + (q.get('error_description') || q.get('error')); return true; }
+  if (!pk || pk.state !== q.get('state')) { S.error = 'Sign-in check failed - please try Connect Dropbox again.'; return true; }
+  const r = await fetch(DBX_TOKEN, { method: 'POST', body: new URLSearchParams({ code: q.get('code'), grant_type: 'authorization_code',
+    code_verifier: pk.verifier, client_id: store.get('appKey', ''), redirect_uri: REDIRECT }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.access_token) { S.error = 'Dropbox sign-in failed: ' + (d.error_description || d.error || r.status); return true; }
+  store.set('token', { access: d.access_token, refresh: d.refresh_token, exp: Date.now() + (d.expires_in || 14400) * 1000 - 60000 });
+  return true;
+}
+async function accessToken() {
+  const t = store.get('token', null);
+  if (!t) return null;
+  if (Date.now() < t.exp) return t.access;
+  const r = await fetch(DBX_TOKEN, { method: 'POST', body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh,
+    client_id: store.get('appKey', '') }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.access_token) { store.del('token'); throw new Error('Dropbox sign-in expired - tap Connect Dropbox again.'); }
+  store.set('token', { access: d.access_token, refresh: t.refresh, exp: Date.now() + (d.expires_in || 14400) * 1000 - 60000 });
+  return d.access_token;
+}
+async function dbx(endpoint, body) {
+  const tok = await accessToken();
+  const r = await fetch(DBX_API + endpoint, { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await dbxErr(r));
+  return r.json();
+}
+async function dbxDownload(path) {
+  const tok = await accessToken();
+  const r = await fetch(DBX_CONTENT + '/files/download', { method: 'POST',
+    headers: { Authorization: 'Bearer ' + tok, 'Dropbox-API-Arg': JSON.stringify({ path }).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) } });
+  if (!r.ok) throw new Error(await dbxErr(r));
+  return r.json();
+}
+async function dbxErr(r) {
+  const t = await r.text().catch(() => '');
+  if (r.status === 401) { store.del('token'); return 'Dropbox sign-in expired - tap Connect Dropbox again.'; }
+  if (/not_found/.test(t)) return `Dropbox can't find the folder "${store.get('folder', '') || '(app folder)'}" - check it in ⚙ Settings.`;
+  return `Dropbox error ${r.status}: ${t.slice(0, 160)}`;
+}
+
+// ------------------------------------------------------------------ trips (cached on the phone for offline use)
+function cachedTrips() { return store.get('trips', {}); }
+async function refresh() {
+  if (!store.get('token', null)) { render(); return; }
+  S.busy = true; S.error = ''; render();
+  try {
+    let folder = (store.get('folder', '') || '').trim().replace(/\/+$/, '');
+    if (folder && !folder.startsWith('/')) folder = '/' + folder;
+    let res = await dbx('/files/list_folder', { path: folder });
+    let entries = res.entries;
+    while (res.has_more) { res = await dbx('/files/list_folder/continue', { cursor: res.cursor }); entries = entries.concat(res.entries); }
+    const files = entries.filter(e => e['.tag'] === 'file' && /\.(trip|tp2)\.json$/i.test(e.name));
+    const old = cachedTrips(), next = {};
+    for (const f of files) {
+      const hit = Object.values(old).find(t => t.path === f.path_lower && t.rev === f.rev);
+      if (hit) { next[hit.uid] = hit; continue; }
+      const doc = await dbxDownload(f.path_lower);
+      if (!['trip-planner-sync', 'travel-planner-2'].includes(doc.format) || !doc.uid) continue;
+      next[doc.uid] = { uid: doc.uid, path: f.path_lower, rev: f.rev, name: doc.name, saved_at: doc.saved_at, saved_by: doc.saved_by, itinerary: doc.itinerary || null };
+    }
+    store.set('trips', next);
+    store.set('checked', new Date().toISOString());
+    if (!files.length) S.error = 'No trips found in that Dropbox folder yet. On your computer, set Menu › Sync Folder to the same folder.';
+  } catch (e) {
+    S.error = (e.message || String(e)) + (Object.keys(cachedTrips()).length ? ' Showing the copies saved on this phone.' : '');
+  }
+  S.busy = false;
+  render();
+}
+
+// ------------------------------------------------------------------ screens
+function render() {
+  $('#hBack').style.display = S.screen === 'trip' ? '' : 'none';
+  if (S.screen === 'trip') return renderTrip();
+  if (S.screen === 'settings') return renderSettings();
+  renderList();
+}
+function when(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function renderList() {
+  $('#title').textContent = 'Trips';
+  const trips = Object.values(cachedTrips()).sort((a, b) => (a.itinerary?.trip?.start_date || '9').localeCompare(b.itinerary?.trip?.start_date || '9') || a.name.localeCompare(b.name));
+  const signed = !!store.get('token', null);
+  let h = S.error ? `<div class="err">${esc(S.error)}</div>` : '';
+  if (!store.get('appKey', '')) {
+    h += `<div class="card"><h2>Welcome</h2><p class="small">This shows the trips your Trip Planner app saves to Dropbox. It needs a one-time setup.</p>
+      <button class="btn primary" onclick="settings()">Set Up</button></div>`;
+  } else if (!signed) {
+    h += `<div class="card"><h2>Connect Dropbox</h2><p class="small">Sign in to Dropbox to read your trip files. Read-only - this app can't change anything.</p>
+      <button class="btn primary" onclick="connect()">Connect Dropbox</button></div>`;
+  }
+  if (S.busy) h += `<div class="status"><span class="spin"></span> Checking Dropbox…</div>`;
+  trips.forEach(t => {
+    const it = t.itinerary || {}, tt = it.totals || {}, start = it.trip?.start_date;
+    h += `<div class="card trip" data-uid="${esc(t.uid)}"><div><b>${esc(t.name)}</b>
+      <span class="tiny muted">${start ? fmtDay(start) + ' · ' : ''}${tt.days ? tt.days + ' days · ' : ''}${tt.miles ? tt.miles + ' mi · ' : ''}${esc(tt.grand || '')}</span><br>
+      <span class="tiny muted">Saved ${esc(when(t.saved_at))}${t.saved_by ? ' on ' + esc(t.saved_by) : ''}</span></div><span class="go">›</span></div>`;
+  });
+  if (!trips.length && !S.busy && signed && !S.error) h += `<div class="status">No trips yet - tap ⟳ to check Dropbox.</div>`;
+  const ck = store.get('checked', '');
+  h += `<div class="status">${ck ? 'Checked Dropbox ' + esc(when(ck)) : ''}<br><a href="#" onclick="$('#fileIn').click();return false" style="color:var(--sel)">Open a trip file from this phone…</a></div>`;
+  $('#main').innerHTML = h;
+  document.querySelectorAll('[data-uid]').forEach(c => c.onclick = () => openTrip(c.dataset.uid));
+}
+function fmtDay(iso) { const d = new Date(iso + 'T12:00:00'); return isNaN(d) ? iso : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }); }
+function dayISO(start, n) { if (!start) return null; const d = new Date(start + 'T12:00:00'); d.setDate(d.getDate() + n - 1); return d.toISOString().slice(0, 10); }
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+function openTrip(uid) {
+  S.screen = 'trip'; S.uid = uid; S.day = null;
+  const t = cachedTrips()[uid], it = t && t.itinerary;
+  if (it) {
+    const td = todayISO(), hit = (it.days || []).find(d => dayISO(it.trip.start_date, d.day) === td);
+    S.day = hit ? hit.day : 'all';
+  }
+  store.set('lastTrip', uid);
+  render(); scrollTo(0, 0);
+}
+function mapLink(s) {
+  const q = s.lat != null && !s.no_route ? `${s.lat},${s.lon}` : [s.address, s.city, s.state].filter(Boolean).join(', ') || s.name;
+  const apple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
+  return apple ? `https://maps.apple.com/?daddr=${encodeURIComponent(q)}` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+}
+function renderTrip() {
+  const t = cachedTrips()[S.uid];
+  if (!t) { S.screen = 'list'; return render(); }
+  $('#title').textContent = t.name;
+  const it = t.itinerary;
+  if (!it) {
+    $('#main').innerHTML = `<div class="card">This trip file was saved by an older Trip Planner. Open the trip on your computer once (any change saves it again), then tap ⟳.</div>`;
+    return;
+  }
+  const tt = it.totals || {}, start = it.trip.start_date, td = todayISO();
+  let h = S.error ? `<div class="err">${esc(S.error)}</div>` : '';
+  h += `<div class="kpis">
+    <div class="kpi main"><div class="l">Total</div><div class="v">${esc(tt.grand || '$0')}</div></div>
+    <div class="kpi"><div class="l">Miles</div><div class="v">${esc(tt.miles || 0)}</div></div>
+    <div class="kpi"><div class="l">Driving</div><div class="v">${esc(tt.drive || '0:00')} h</div></div>
+    <div class="kpi"><div class="l">Days / nights</div><div class="v">${esc(tt.days)} / ${esc(tt.nights)}</div></div>
+    <div class="kpi"><div class="l">Fuel</div><div class="v">${esc(tt.fuel || '$0')}</div></div>
+    <div class="kpi"><div class="l">Lodging</div><div class="v">${esc(tt.lodging || '$0')}</div></div></div>`;
+  h += `<div class="daybar"><button data-d="all" class="${S.day === 'all' ? 'on' : ''}">All days</button>` +
+    it.days.map(d => `<button data-d="${d.day}" class="${String(S.day) === String(d.day) ? 'on' : ''}${dayISO(start, d.day) === td ? ' today' : ''}">Day ${d.day}${start ? ' · ' + esc(d.date.split(' ')[1] || '') : ''}</button>`).join('') + '</div>';
+  if ((it.warnings || []).length) {
+    h += `<details class="warn"><summary>⚠ ${it.warnings.length} fuel &amp; schedule note${it.warnings.length === 1 ? '' : 's'}</summary><ul>${it.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>`;
+  }
+  const days = S.day === 'all' ? it.days : it.days.filter(d => String(d.day) === String(S.day));
+  days.forEach(d => {
+    h += `<div class="dayhead"><div class="t">Day ${d.day}${d.date ? ' · ' + esc(d.date) : ''}${dayISO(start, d.day) === td ? ' · <span style="color:var(--green)">Today</span>' : ''}${d.plan ? ` · <span style="color:var(--muted)">${esc(d.plan)}</span>` : ''}</div>
+      <div class="s"><span>${esc(d.span)}</span><span>${d.stops} stop${d.stops === 1 ? '' : 's'}</span><span>${esc(d.miles)} mi</span>${d.drive ? `<span>${esc(d.drive)} driving</span>` : ''}<span>${esc(d.total || '$0.00')}</span></div></div>`;
+    it.stops.filter(s => s.day === d.day).forEach((s, i) => {
+      const kind = s.tag === 'OUT' || s.tag === 'LOW' ? s.tag : s.type === 'Fuel' ? 'fuel' : s.type === 'Lodging' ? 'lodging' : '';
+      const where = s.address || [s.city, s.state].filter(Boolean).join(', ');
+      const items = (s.purchases || []).map(p => `${esc(p.category)} $${(+p.amount).toFixed(2)}${p.note ? ' (' + esc(p.note) + ')' : ''}`).join(' · ');
+      h += `<div class="stop ${kind}">
+        <div class="top"><div class="nm">${esc(s.name)}</div><div class="time">${esc(s.arrive || s.leave || '')}</div></div>
+        <div class="meta"><span>${esc(s.type_txt || s.type)}</span>${where ? `<span>${esc(where)}</span>` : ''}${s.tag === 'OUT' ? '<span class="tag" style="color:var(--red)">out of fuel</span>' : s.tag === 'LOW' ? '<span class="tag" style="color:var(--amber)">low fuel</span>' : ''}</div>
+        <div class="grid">
+          <div><span>Miles</span><b>${s.no_route ? 'est. ' : ''}${esc(s.leg || '–')}</b></div>
+          <div><span>Drive</span><b>${esc(s.drive_txt || '–')}</b></div>
+          <div><span>Leave</span><b>${esc(s.leave || '–')}</b></div>
+          <div><span>Stay</span><b>${s.stay_txt ? esc(s.stay_txt) + ' min' : '–'}</b></div>
+          <div><span>Tank on arrival</span><b>${esc(s.tank || '–')}</b></div>
+          <div><span>Cost</span><b>${esc(s.cost_txt || '–')}</b></div>
+          ${s.refuel ? `<div><span>${s.partial_gal != null ? 'Partial fill' : 'Fill up'}</span><b>${esc(s.refuel)} gal</b></div>` : ''}
+        </div>
+        ${items ? `<div class="notes muted">${items}</div>` : ''}
+        ${s.notes ? `<div class="notes">📝 ${esc(s.notes)}</div>` : ''}
+        ${s.no_route ? '' : `<div class="acts"><a href="${mapLink(s)}" target="_blank" rel="noopener">Directions</a></div>`}
+      </div>`;
+    });
+  });
+  h += `<div class="status">Saved ${esc(when(t.saved_at))}${t.saved_by ? ' on ' + esc(t.saved_by) : ''} · view only - edit on your computer</div>`;
+  $('#main').innerHTML = h;
+  document.querySelectorAll('.daybar [data-d]').forEach(b => b.onclick = () => { S.day = b.dataset.d === 'all' ? 'all' : +b.dataset.d; render(); scrollTo(0, 0); });
+  const on = document.querySelector('.daybar .on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+function settings() { S.screen = 'settings'; render(); }
+function renderSettings() {
+  $('#title').textContent = 'Settings';
+  $('#hBack').style.display = '';
+  const signed = !!store.get('token', null);
+  $('#main').innerHTML = `
+    <div class="card"><h2>Dropbox app key</h2>
+      <p class="small muted" style="margin-top:0">From the Dropbox app you made at dropbox.com/developers (see the setup guide). It isn't a password - it only names your app.</p>
+      <input id="sKey" value="${esc(store.get('appKey', ''))}" placeholder="e.g. a1b2c3d4e5f6g7h" autocapitalize="off" autocomplete="off" spellcheck="false">
+      <p class="tiny muted">Redirect URI to enter in the Dropbox app settings:<br><code>${esc(REDIRECT)}</code></p></div>
+    <div class="card"><h2>Folder</h2>
+      <p class="small muted" style="margin-top:0">Leave blank if your Dropbox app uses an <b>App folder</b> (recommended). Otherwise type the folder path, e.g. <code>/Trip Planner</code>.</p>
+      <input id="sFolder" value="${esc(store.get('folder', ''))}" placeholder="(app folder)" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
+    <div class="card row"><button class="btn primary" id="sSave">Save</button>
+      ${signed ? '<button class="btn" id="sOut">Disconnect Dropbox</button>' : '<button class="btn" id="sConn">Save &amp; Connect Dropbox</button>'}</div>
+    <div class="status">Trips are kept on this phone after each check, so they still show with no signal.</div>`;
+  const save = () => { store.set('appKey', $('#sKey').value.trim()); store.set('folder', $('#sFolder').value.trim()); };
+  $('#sSave').onclick = () => { save(); S.screen = 'list'; refresh(); };
+  if (signed) $('#sOut').onclick = () => { store.del('token'); store.del('trips'); S.screen = 'list'; render(); };
+  else $('#sConn').onclick = () => { save(); connect(); };
+}
+
+$('#hBack').onclick = () => { S.screen = 'list'; S.error = ''; render(); };
+$('#hRefresh').onclick = () => refresh();
+$('#hMenu').onclick = () => settings();
+$('#fileIn').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const doc = JSON.parse(await f.text());
+    if (!['trip-planner-sync', 'travel-planner-2'].includes(doc.format)) throw new Error('That isn’t a Trip Planner trip file.');
+    const all = cachedTrips();
+    all[doc.uid] = { uid: doc.uid, path: 'file:' + f.name, rev: '', name: doc.name, saved_at: doc.saved_at, saved_by: doc.saved_by, itinerary: doc.itinerary || null };
+    store.set('trips', all);
+    openTrip(doc.uid);
+  } catch (er) { S.error = er.message; render(); }
+  e.target.value = '';
+};
+
+(async () => {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  try { await finishSignIn(); } catch (e) { S.error = 'Dropbox sign-in failed: ' + e.message; }
+  const last = store.get('lastTrip', null);
+  if (last && cachedTrips()[last] && !S.error) openTrip(last); else render();
+  if (store.get('token', null)) refresh();
+})();
+</script>
+</body>
+</html>
