@@ -118,6 +118,8 @@
   .donebox .drow { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--line); }
   .donebox .drow > div { flex: 1; min-width: 0; } .donebox .drow .tiny { margin-top: 2px; }
   .donebox .ed { font-size: 13px; color: var(--sel); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; flex: none; }
+  .arcbox { margin-top: 6px; } .arcbox > summary { padding: 10px 4px; color: var(--muted); font-weight: 600; font-size: 14.5px; cursor: pointer; }
+  .arcbox .card.trip { opacity: .8; }
   .pend { font-size: 12.5px; text-align: center; color: var(--amber); margin: 6px 0; }
   /* list / map switch */
   .seg { display: flex; background: var(--chip); border-radius: 9px; padding: 3px; gap: 3px; margin-bottom: 10px; }
@@ -300,21 +302,25 @@ function renderList() {
     h += `<div class="card"><h2>Welcome</h2><p class="small">This shows the trips your Trip Planner app saves to Dropbox. It needs a one-time setup.</p>
       <button class="btn primary" onclick="settings()">Set Up</button></div>`;
   } else if (!signed) {
-    h += `<div class="card"><h2>Connect Dropbox</h2><p class="small">Sign in to Dropbox to read your trip files. Read-only - this app can't change anything.</p>
+    h += `<div class="card"><h2>Connect Dropbox</h2><p class="small">Sign in to Dropbox to read your trip files. The only thing this app writes is a small check-in file next to each trip - it never changes a trip.</p>
       <button class="btn primary" onclick="connect()">Connect Dropbox</button></div>`;
   }
   if (S.busy) h += `<div class="status"><span class="spin"></span> Checking Dropbox…</div>`;
-  trips.forEach(t => {
+  const card = t => {
     const it = t.itinerary || {}, tt = it.totals || {}, start = it.trip?.start_date;
-    h += `<div class="card trip" data-uid="${esc(t.uid)}"><div><b>${esc(t.name)}</b>
+    return `<div class="card trip" data-uid="${esc(t.uid)}"><div><b>${esc(t.name)}</b>
       <span class="tiny muted">${start ? fmtDay(start) + ' · ' : ''}${tt.days ? tt.days + ' days · ' : ''}${tt.miles ? tt.miles + ' mi · ' : ''}${esc(tt.grand || '')}</span><br>
       <span class="tiny muted">Saved ${esc(when(t.saved_at))}${t.saved_by ? ' on ' + esc(t.saved_by) : ''}</span></div><span class="go">›</span></div>`;
-  });
+  };
+  const arc = trips.filter(t => t.itinerary?.trip?.archived);     // archived on the computer: tucked away below
+  h += trips.filter(t => !arc.includes(t)).map(card).join('');
+  if (arc.length) h += `<details class="arcbox"${S.arcOpen ? ' open' : ''}><summary>Archived trips (${arc.length})</summary>${arc.map(card).join('')}</details>`;
   if (!trips.length && !S.busy && signed && !S.error) h += `<div class="status">No trips yet - tap ⟳ to check Dropbox.</div>`;
   const ck = store.get('checked', '');
   h += `<div class="status">${ck ? 'Checked Dropbox ' + esc(when(ck)) : ''}<br><a href="#" onclick="$('#fileIn').click();return false" style="color:var(--sel)">Open a trip file from this phone…</a></div>`;
   $('#main').innerHTML = h;
   document.querySelectorAll('[data-uid]').forEach(c => c.onclick = () => openTrip(c.dataset.uid));
+  const ab = document.querySelector('details.arcbox'); if (ab) ab.addEventListener('toggle', () => { S.arcOpen = ab.open; });
 }
 function fmtDay(iso) { const d = new Date(iso + 'T12:00:00'); return isNaN(d) ? iso : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }); }
 function dayISO(start, n) { if (!start) return null; const d = new Date(start + 'T12:00:00'); d.setDate(d.getDate() + n - 1); return d.toISOString().slice(0, 10); }
